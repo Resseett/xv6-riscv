@@ -20,6 +20,8 @@ int link(const char*, const char*);
 int mkdir(const char*);
 int chdir(const char*);
 int dup(int);
+int getancestor(int); //
+int getppid(void); //
 int getpid(void);
 char* sys_sbrk(int,int);
 int pause(int);
