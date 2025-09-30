@@ -25,27 +25,31 @@ Para implementar estas dos llamadas al sistema, se modificaron y crearon archivo
 
 
 Archivo: kernel/syscall.h
-Modificaciones realizadas: Se modificó con la adición de los identificadores SYS_getppid y SYS_getancestor con valores numéricos únicos.
+Modificaciones realizadas: Se agregaron los identificadores SYS_getppid y SYS_getancestor con valores numéricos únicos, en este caso 22 y 23 respectivamente.
 Motivo de la modificación: El núcleo necesita un número para reconocer y enrutar las nuevas llamadas al sistema.
 
 Archivo: kernel/syscall.c
-Modificaciones realizadas: Se modificó con las declaraciones extern y la adición de sys_getppid y sys_getancestor a la tabla syscalls[].
-Motivo de la modificación: El handler de llamadas al sistema necesita mapear los números de syscall.h con sus funciones de implementación correspondientes en el kernel.
+Modificaciones realizadas: Se agregan las declaraciones extern y más sys_getppid y sys_getancestor a la tabla de syscalls[].
+Motivo de la modificación: Cada número de llamada (el identificador de syscall.h) se enlaza a la función que debe ejecutar el kernel.
 
 Archivo: kernel/sysproc.c
-Modificaciones realizadas: Se modificó con la implementación de las funciones sys_getppid() y sys_getancestor().
-Motivo de la modificación: Estas funciones contienen la lógica central para acceder a la estructura proc y obtener el PID del padre o navegar la cadena de ancestros hasta el nivel solicitado.
+Modificaciones realizadas: Se implementan las funciones sys_getppid() y sys_getancestor().
+Motivo de la modificación: Estas funciones contienen la lógica central para acceder a la estructura proc y obtener el PID del padre o navegar la cadena de ancestros hasta el nivel solicitado, son los encargados de resolver lo solicitado en la tarea.
+
+Archivo: user/usys.pl
+Modificaciones realizadas: Se agregaron las líneas entry("getppid"); y entry("getancestor"); a la lista de llamadas.
+Motivo de la modificación: Este script genera los **"talones" o "stubs" en ensamblador** (el archivo usys.S) que actúan como **puente** entre el código de usuario y el kernel. Al añadir las nuevas funciones, se asegura que este puente exista. Se agregan estas lineas para poder realizar una conección entre el user y el kernel de manera de asegurar que todo este conectado.
 
 Archivo: user/user.h
-Modificaciones realizadas: Se modificó con la declaración de los prototipos int getppid(void); e int getancestor(int);.
+Modificaciones realizadas: Se agregan la declaración de las funciones int getppid(void); e int getancestor(int);.
 Motivo de la modificación: Los programas de usuario necesitan conocer la firma de las funciones para poder compilar sin errores al llamarlas.
 
-Archivos: user/yosoytupadre.c y user/ancestortest.c
-Modificaciones realizadas: Se crearon con el código de prueba que llama a las nuevas funciones.
-Motivo de la modificación: Es un requisito de la tarea validar y demostrar el correcto funcionamiento de getppid() y getancestor().
+Archivos: user/yosoytupadre.c 
+Modificaciones realizadas: Se crea el código de prueba que llama a las nuevas funciones.
+Motivo de la modificación: Con este archivo se es capaz de llamar las funciones declaradas dentro del archivo.
 
 Archivo: Makefile
-Modificaciones realizadas: Se modificó la variable UPROGS añadiendo _yosoytupadre y _ancestortest.
+Modificaciones realizadas: Se modificó la variable UPROGS añadiendo _yosoytupadre 
 Motivo de la modificación: Se requiere compilar, enlazar e incluir los nuevos programas de prueba en la imagen final del sistema operativo.
 
 ----------------------------------------------------------------------
@@ -62,5 +66,5 @@ if(argint(0, &n) < 0)
   return -1;
 
 * Error generado por make: void value not ignored as it ought to be
-* Causa: La función argint() en xv6 está definida para tener un tipo de retorno void (no retorna ningún valor), pero se estaba utilizando su resultado en una comparación (< 0). Esto indica un mal uso de la API interna del sistema operativo.
+* Causa: La función argint() en xv6 está definida para tener un tipo de retorno void (no retorna ningún valor), pero se estaba utilizando su resultado en una comparación (< 0).
 * Resolución: Se eliminó la comprobación del valor de retorno de argint(). La función simplemente se llama para cargar el argumento en la variable n, y luego se verifica la validez de n de forma independiente.
