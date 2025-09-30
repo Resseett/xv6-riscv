@@ -38,7 +38,7 @@ Motivo de la modificación: Estas funciones contienen la lógica central para ac
 
 Archivo: user/usys.pl
 Modificaciones realizadas: Se agregaron las líneas entry("getppid"); y entry("getancestor"); a la lista de llamadas.
-Motivo de la modificación:  Se agregan estas lineas para poder realizar una conección entre el user y el kernel de manera de asegurar que esten conectados.
+Motivo de la modificación:  Se agregan estas lineas para poder realizar una conexión entre el user y el kernel de manera de asegurar que esten conectados.
 
 Archivo: user/user.h
 Modificaciones realizadas: Se agregan la declaración de las funciones int getppid(void); e int getancestor(int);.
