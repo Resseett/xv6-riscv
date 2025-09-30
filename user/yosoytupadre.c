@@ -20,6 +20,8 @@ int main(void) {
     pid = getancestor(2);
     printf("PID de mi abuelo: %d\n", pid);
    
-    
+    printf("\nProbando getancestor(8):\n");
+    pid = getancestor(8);
+    printf("PID del ancestro 8: %d\n", pid);
     exit(0);
 }
