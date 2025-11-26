@@ -81,10 +81,12 @@ usertrap(void)
       
       // Verificar si es una página protegida (W=1, R=0)
       if(pte && (*pte & PTE_V) && (*pte & PTE_U) && 
-         (*pte & PTE_W) && !(*pte & PTE_R)) {
+        (*pte & PTE_W) && !(*pte & PTE_R)) {
+
         // Permitir escritura temporalmente activando PTE_R
         *pte |= PTE_R;
-        // La instrucción se reintentará automáticamente
+    // La instrucción se reintentará automáticamente
+
       } else {
         // Store fault normal - error
         printf("usertrap(): unexpected scause %lx pid=%d\n", scause, p->pid);

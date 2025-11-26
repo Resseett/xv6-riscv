@@ -500,65 +500,80 @@ ismapped(pagetable_t pagetable, uint64 va)
 
 
 
-int
-mrdprotect(void *addr, int len)
-{
-  struct proc *p = myproc();
-  uint64 va = (uint64)addr;
-  pte_t *pte;
-  
-  if(len <= 0) return -1;
-  if(va % PGSIZE != 0) return -1;
-  
-  // Iterar sobre las páginas
-  for(int i = 0; i < len; i++) {
-    uint64 current_va = va + (i * PGSIZE);
+// Proteger páginas contra lectura
+int mrdprotect(pagetable_t pagetable, uint64 addr, int len) {
+    uint64 a;
+    pte_t *pte;
     
-    if(current_va >= p->sz) return -1;
+    // Validaciones
+    if (len <= 0 || addr % PGSIZE != 0)
+        return -1;
     
-    pte = walk(p->pagetable, current_va, 0);
+    if (addr >= MAXVA)
+        return -1;
     
-    if(pte == 0) return -1;
-    if((*pte & PTE_V) == 0) return -1;
-    if((*pte & PTE_U) == 0) return -1;
+    // Recorrer las páginas
+    for (a = addr; a < addr + len * PGSIZE; a += PGSIZE) {
+        // Verificar que no sea memoria del kernel
+        if (a >= MAXVA)
+            return -1;
+        
+        // Obtener el PTE
+        pte = walk(pagetable, a, 0);
+        
+        // Verificar que el PTE existe y es válido
+        if (pte == 0)
+            return -1;
+        
+        if ((*pte & PTE_V) == 0)
+            return -1;
+        
+        // Verificar que sea de usuario
+        if ((*pte & PTE_U) == 0)
+            return -1;
+        
+        // Limpiar el bit de lectura
+        *pte = *pte & ~PTE_R;
+    }
     
-    // Quitar bit de lectura
-    *pte = *pte & ~PTE_R;
-  }
-  
-  // CRÍTICO: Avisar a la CPU que los permisos cambiaron (flush TLB)
-  sfence_vma();
-  
-  return 0;
+    return 0;
 }
 
-int
-munrdprotect(void *addr, int len)
-{
-  struct proc *p = myproc();
-  uint64 va = (uint64)addr;
-  pte_t *pte;
-  
-  if(len <= 0) return -1;
-  if(va % PGSIZE != 0) return -1;
-  
-  for(int i = 0; i < len; i++) {
-    uint64 current_va = va + (i * PGSIZE);
+// Restaurar permisos de lectura
+int munrdprotect(pagetable_t pagetable, uint64 addr, int len) {
+    uint64 a;
+    pte_t *pte;
     
-    if(current_va >= p->sz) return -1;
+    // Validaciones
+    if (len <= 0 || addr % PGSIZE != 0)
+        return -1;
     
-    pte = walk(p->pagetable, current_va, 0);
+    if (addr >= MAXVA)
+        return -1;
     
-    if(pte == 0) return -1;
-    if((*pte & PTE_V) == 0) return -1;
-    if((*pte & PTE_U) == 0) return -1;
+    // Recorrer las páginas
+    for (a = addr; a < addr + len * PGSIZE; a += PGSIZE) {
+        // Verificar que no sea memoria del kernel
+        if (a >= MAXVA)
+            return -1;
+        
+        // Obtener el PTE
+        pte = walk(pagetable, a, 0);
+        
+        // Verificar que el PTE existe y es válido
+        if (pte == 0)
+            return -1;
+        
+        if ((*pte & PTE_V) == 0)
+            return -1;
+        
+        // Verificar que sea de usuario
+        if ((*pte & PTE_U) == 0)
+            return -1;
+        
+        // Activar el bit de lectura
+        *pte = *pte | PTE_R;
+    }
     
-    // Restaurar bit de lectura
-    *pte = *pte | PTE_R;
-  }
-  
-  // CRÍTICO: Avisar a la CPU que los permisos cambiaron (flush TLB)
-  sfence_vma();
-  
-  return 0;
+    return 0;
 }

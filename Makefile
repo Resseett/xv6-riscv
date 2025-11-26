@@ -176,6 +176,9 @@ QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 qemu: check-qemu-version $K/kernel fs.img
 	$(QEMU) $(QEMUOPTS)
+	
+qemu-nox: check-qemu-version $K/kernel fs.img
+	$(QEMU) $(QEMUOPTS) -serial mon:stdio
 
 .gdbinit: .gdbinit.tmpl-riscv
 	sed "s/:1234/:$(GDBPORT)/" < $^ > $@
