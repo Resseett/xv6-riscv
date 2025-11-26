@@ -72,23 +72,56 @@ usertrap(void)
             vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
     // page fault on lazily-allocated page
   } else {
-    printf("usertrap(): unexpected scause %lx pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%lx stval=%lx\n", r_sepc(), r_stval());
-    setkilled(p);
+    uint64 scause = r_scause();
+    uint64 stval = r_stval();
+    
+    // Manejo especial para páginas con protección de lectura
+    if(scause == 15) {  // Store page fault (escritura)
+      pte_t *pte = walk(p->pagetable, stval, 0);
+      
+      // Verificar si es una página protegida (W=1, R=0)
+      if(pte && (*pte & PTE_V) && (*pte & PTE_U) && 
+         (*pte & PTE_W) && !(*pte & PTE_R)) {
+        // Permitir escritura temporalmente activando PTE_R
+        *pte |= PTE_R;
+        // La instrucción se reintentará automáticamente
+      } else {
+        // Store fault normal - error
+        printf("usertrap(): unexpected scause %lx pid=%d\n", scause, p->pid);
+        printf("            sepc=%lx stval=%lx\n", r_sepc(), stval);
+        setkilled(p);
+      }
+    } else if(scause == 13) {  // Load page fault (lectura)
+      pte_t *pte = walk(p->pagetable, stval, 0);
+      
+      // Si es una página protegida, DENEGAR la lectura
+      if(pte && (*pte & PTE_V) && (*pte & PTE_U) && 
+         (*pte & PTE_W) && (*pte & PTE_R)) {
+        // Página protegida - matar el proceso
+        printf("Lectura denegada en direccion protegida: %lx\n", stval);
+        setkilled(p);
+      } else {
+        // Load fault normal - error
+        printf("usertrap(): unexpected scause %lx pid=%d\n", scause, p->pid);
+        printf("            sepc=%lx stval=%lx\n", r_sepc(), stval);
+        setkilled(p);
+      }
+    } else {
+      // Otra excepción
+      printf("usertrap(): unexpected scause %lx pid=%d\n", scause, p->pid);
+      printf("            sepc=%lx stval=%lx\n", r_sepc(), stval);
+      setkilled(p);
+    }
   }
 
-  // CRÍTICO: Estas líneas deben estar al final
   if(killed(p))
     kexit(-1);
 
-  // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();
 
   prepare_return();
-  
-  // CORRECCIÓN: Usar MAKE_SATP para formatear correctamente el registro
-  return MAKE_SATP(p->pagetable);
+  return (uint64)p->pagetable;
 }
 
 //

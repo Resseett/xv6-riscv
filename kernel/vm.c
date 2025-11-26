@@ -449,26 +449,37 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 // that was lazily allocated in sys_sbrk().
 // returns 0 if va is invalid or already mapped, or if
 // out of physical memory, and physical address if successful.
+// ... (código anterior en vm.c)
+
+// allocate and map user memory if process is referencing a page
+// that was lazily allocated in sys_sbrk().
 uint64
 vmfault(pagetable_t pagetable, uint64 va, int read)
 {
   uint64 mem;
-  struct proc *p = myproc();
+  struct proc *p = myproc(); // Necesario para p->sz
 
   if (va >= p->sz)
     return 0;
+  
   va = PGROUNDDOWN(va);
+  
   if(ismapped(pagetable, va)) {
     return 0;
   }
+  
   mem = (uint64) kalloc();
   if(mem == 0)
     return 0;
+    
   memset((void *) mem, 0, PGSIZE);
-  if (mappages(p->pagetable, va, PGSIZE, mem, PTE_W|PTE_U|PTE_R) != 0) {
+  
+  // CORRECCIÓN: Usar 'pagetable' (el argumento) en lugar de p->pagetable
+  if (mappages(pagetable, va, PGSIZE, mem, PTE_W|PTE_U|PTE_R) != 0) {
     kfree((void *)mem);
     return 0;
   }
+  
   return mem;
 }
 
@@ -496,51 +507,27 @@ mrdprotect(void *addr, int len)
   uint64 va = (uint64)addr;
   pte_t *pte;
   
+  if(len <= 0) return -1;
+  if(va % PGSIZE != 0) return -1;
   
-  if(len <= 0) {
-    return -1;
-  }
-  
-  
-  if(va % PGSIZE != 0) {
-    return -1;
-  }
-  
-  
-  if(va >= MAXVA) {
-    return -1;
-  }
-  
-  // Recorrer cada página del rango
+  // Iterar sobre las páginas
   for(int i = 0; i < len; i++) {
     uint64 current_va = va + (i * PGSIZE);
     
-    // Verificar que no excede el tamaño del proceso
-    if(current_va >= p->sz) {
-      return -1;
-    }
-    
+    if(current_va >= p->sz) return -1;
     
     pte = walk(p->pagetable, current_va, 0);
     
-    // Verificar que el PTE existe
-    if(pte == 0) {
-      return -1;
-    }
+    if(pte == 0) return -1;
+    if((*pte & PTE_V) == 0) return -1;
+    if((*pte & PTE_U) == 0) return -1;
     
-    // Verificar que la página es válida
-    if((*pte & PTE_V) == 0) {
-      return -1;
-    }
-    
-    // Verificar que es una página de usuario
-    if((*pte & PTE_U) == 0) {
-      return -1;
-    }
-    
-    
+    // Quitar bit de lectura
     *pte = *pte & ~PTE_R;
   }
+  
+  // CRÍTICO: Avisar a la CPU que los permisos cambiaron (flush TLB)
+  sfence_vma();
   
   return 0;
 }
@@ -552,44 +539,26 @@ munrdprotect(void *addr, int len)
   uint64 va = (uint64)addr;
   pte_t *pte;
   
-  
-  if(len <= 0) {
-    return -1;
-  }
-  
-  if(va % PGSIZE != 0) {
-    return -1;
-  }
-  
-  if(va >= MAXVA) {
-    return -1;
-  }
-  
+  if(len <= 0) return -1;
+  if(va % PGSIZE != 0) return -1;
   
   for(int i = 0; i < len; i++) {
     uint64 current_va = va + (i * PGSIZE);
     
-    if(current_va >= p->sz) {
-      return -1;
-    }
+    if(current_va >= p->sz) return -1;
     
     pte = walk(p->pagetable, current_va, 0);
     
-    if(pte == 0) {
-      return -1;
-    }
+    if(pte == 0) return -1;
+    if((*pte & PTE_V) == 0) return -1;
+    if((*pte & PTE_U) == 0) return -1;
     
-    if((*pte & PTE_V) == 0) {
-      return -1;
-    }
-    
-    if((*pte & PTE_U) == 0) {
-      return -1;
-    }
-    
-    
+    // Restaurar bit de lectura
     *pte = *pte | PTE_R;
   }
+  
+  // CRÍTICO: Avisar a la CPU que los permisos cambiaron (flush TLB)
+  sfence_vma();
   
   return 0;
 }
