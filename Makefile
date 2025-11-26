@@ -143,7 +143,8 @@ UPROGS=\
 	$U/_forphan\
 	$U/_dorphan\
 	$U/_yosoytupadre\
-	$U/_ancestortest
+	$U/_ancestortest\
+	$U/_rdprotect_test\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

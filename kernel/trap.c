@@ -44,7 +44,7 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
-  w_stvec((uint64)kernelvec);  //DOC: kernelvec
+  w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
   
@@ -72,11 +72,12 @@ usertrap(void)
             vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
     // page fault on lazily-allocated page
   } else {
-    printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
+    printf("usertrap(): unexpected scause %lx pid=%d\n", r_scause(), p->pid);
+    printf("            sepc=%lx stval=%lx\n", r_sepc(), r_stval());
     setkilled(p);
   }
 
+  // CRÍTICO: Estas líneas deben estar al final
   if(killed(p))
     kexit(-1);
 
@@ -85,12 +86,9 @@ usertrap(void)
     yield();
 
   prepare_return();
-
-  // the user page table to switch to, for trampoline.S
-  uint64 satp = MAKE_SATP(p->pagetable);
-
-  // return to trampoline.S; satp value in a0.
-  return satp;
+  
+  // CORRECCIÓN: Usar MAKE_SATP para formatear correctamente el registro
+  return MAKE_SATP(p->pagetable);
 }
 
 //

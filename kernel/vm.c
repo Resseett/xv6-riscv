@@ -484,3 +484,112 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+
+
+
+
+
+int
+mrdprotect(void *addr, int len)
+{
+  struct proc *p = myproc();
+  uint64 va = (uint64)addr;
+  pte_t *pte;
+  
+  
+  if(len <= 0) {
+    return -1;
+  }
+  
+  
+  if(va % PGSIZE != 0) {
+    return -1;
+  }
+  
+  
+  if(va >= MAXVA) {
+    return -1;
+  }
+  
+  // Recorrer cada página del rango
+  for(int i = 0; i < len; i++) {
+    uint64 current_va = va + (i * PGSIZE);
+    
+    // Verificar que no excede el tamaño del proceso
+    if(current_va >= p->sz) {
+      return -1;
+    }
+    
+    
+    pte = walk(p->pagetable, current_va, 0);
+    
+    // Verificar que el PTE existe
+    if(pte == 0) {
+      return -1;
+    }
+    
+    // Verificar que la página es válida
+    if((*pte & PTE_V) == 0) {
+      return -1;
+    }
+    
+    // Verificar que es una página de usuario
+    if((*pte & PTE_U) == 0) {
+      return -1;
+    }
+    
+    
+    *pte = *pte & ~PTE_R;
+  }
+  
+  return 0;
+}
+
+int
+munrdprotect(void *addr, int len)
+{
+  struct proc *p = myproc();
+  uint64 va = (uint64)addr;
+  pte_t *pte;
+  
+  
+  if(len <= 0) {
+    return -1;
+  }
+  
+  if(va % PGSIZE != 0) {
+    return -1;
+  }
+  
+  if(va >= MAXVA) {
+    return -1;
+  }
+  
+  
+  for(int i = 0; i < len; i++) {
+    uint64 current_va = va + (i * PGSIZE);
+    
+    if(current_va >= p->sz) {
+      return -1;
+    }
+    
+    pte = walk(p->pagetable, current_va, 0);
+    
+    if(pte == 0) {
+      return -1;
+    }
+    
+    if((*pte & PTE_V) == 0) {
+      return -1;
+    }
+    
+    if((*pte & PTE_U) == 0) {
+      return -1;
+    }
+    
+    
+    *pte = *pte | PTE_R;
+  }
+  
+  return 0;
+}
