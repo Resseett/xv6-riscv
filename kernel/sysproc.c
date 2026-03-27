@@ -105,3 +105,23 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_settickets(void)
+{
+  int n;
+  argint(0, &n);
+  
+  if(n < 1) {
+    n = 1;
+  }
+  
+  return settickets(n);
+}
+
+uint64
+sys_print_stats(void)
+{
+  print_process_stats();
+  return 0;
+}

@@ -6,6 +6,14 @@
 #include "proc.h"
 #include "defs.h"
 
+static unsigned long rand_seed = 1;
+
+unsigned long
+rand(void) {
+  rand_seed = rand_seed * 1103515245 + 12345;
+  return (rand_seed / 65536) % 32768;
+}
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -25,6 +33,8 @@ extern char trampoline[]; // trampoline.S
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
+
+
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -124,6 +134,9 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+
+  p->tickets = 100; // Default number of tickets
+  p->counter = 0; // changes done for lottery scheduling and second homework
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -231,7 +244,7 @@ userinit(void)
   release(&p->lock);
 }
 
-// Shrink user memory by n bytes.
+// Grow or shrink user memory by n bytes.
 // Return 0 on success, -1 on failure.
 int
 growproc(int n)
@@ -241,6 +254,9 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    if(sz + n > TRAPFRAME) {
+      return -1;
+    }
     if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
       return -1;
     }
@@ -272,6 +288,8 @@ kfork(void)
     return -1;
   }
   np->sz = p->sz;
+
+  np->tickets = p->tickets; // Inherit tickets from parent so this way every child has the same number of tickets as the parent
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -418,47 +436,86 @@ kwait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+
+
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-
+  
   c->proc = 0;
+  
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
     intr_on();
-    intr_off();
-
-    int found = 0;
+    
+    // 1. Calcular total de tickets
+    int total_tickets = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+        if(p->tickets < 1) {
+          p->tickets = 1;
+        }
+        total_tickets += p->tickets;
       }
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
+    
+    // Si no hay procesos RUNNABLE
+    if(total_tickets == 0) {
+      continue;
+    }
+    
+    // 2. Elegir ticket ganador
+    int winner = 1 + (rand() % total_tickets);
+    
+    // 3. Buscar el proceso ganador
+    int accumulated = 0;
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      
+      if(p->state == RUNNABLE) {
+        accumulated += p->tickets;
+        
+        if(accumulated >= winner) {
+          // Este proceso ganó
+          p->state = RUNNING;
+          p->counter++;
+          c->proc = p;
+          
+          swtch(&c->context, &p->context);
+          
+          c->proc = 0;
+          release(&p->lock);
+          break;
+        }
+      }
+      
+      release(&p->lock);
     }
   }
 }
 
+
+// Función para mostrar estadísticas de procesos
+void
+print_process_stats(void)
+{
+  struct proc *p;
+  
+  printf("PID\tNAME\t\tTICKETS\tRUN_SLICES\n");
+  printf("---\t----\t\t-------\t----------\n");
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED && p->counter > 0) {
+      printf("%d\t%s\t\t%d\t%d\n", 
+             p->pid, p->name, p->tickets, p->counter);
+    }
+    release(&p->lock);
+  }
+}
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this
@@ -624,6 +681,22 @@ killed(struct proc *p)
   k = p->killed;
   release(&p->lock);
   return k;
+}
+
+int
+settickets(int n)
+{
+  struct proc *p = myproc();
+  
+  if(n < 1) {
+    n = 1;
+  }
+  
+  acquire(&p->lock);
+  p->tickets = n;
+  release(&p->lock);
+  
+  return 0;
 }
 
 // Copy to either a user address, or kernel address,
